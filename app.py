@@ -24,10 +24,11 @@ def request_fastapi(image_path):
         response.raise_for_status()
         
         result = response.json()
-        predicted_class = result.get("food_label")
+        predicted_class = result.get("prediction")
         probability = result.get("probability")
         
         return predicted_class, probability
+
     except Exception as e:
         print(f"Error during inference: {e}")  
         return None, None  
