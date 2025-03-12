@@ -13,35 +13,32 @@ os.makedirs(os.path.join(app.instance_path, 'uploads'), exist_ok=True)
 TRITON_SERVER_URL=os.environ['TRITON_SERVER_URL']
 FOOD11_MODEL_NAME=os.environ['FOOD11_MODEL_NAME']
 
-def preprocess_image(img):
-    transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-    return transform(img).unsqueeze(0).numpy()
-
 # New! for making requests to Triton
-def request_triton(image_tensor):
+def request_triton(image_path):
     try:
+        # Connect to Triton server
         client = httpclient.InferenceServerClient(url=TRITON_SERVER_URL)
 
-        input_data = httpclient.InferInput("input", image_tensor.shape, "FP32")
-        input_data.set_data_from_numpy(image_tensor)
+        # Prepare inputs and outputs
+        with open(image_path, 'rb') as f:
+            image_bytes = f.read()
 
-        response = client.infer(FOOD11_MODEL_NAME, [input_data])
-        output = response.as_numpy("output")
+        inputs = []
+        inputs.append(httpclient.InferInput("INPUT_IMAGE", [1, 1], "BYTES"))
 
-        classes = np.array([
-            "Bread", "Dairy product", "Dessert", "Egg", "Fried food",
-            "Meat", "Noodles/Pasta", "Rice", "Seafood", "Soup",
-            "Vegetable/Fruit"
-        ])
+        encoded_str =  base64.b64encode(image_bytes).decode("utf-8")
+        input_data = np.array([[encoded_str]], dtype=object)
+        inputs[0].set_data_from_numpy(input_data)
 
-        predicted_class_idx = np.argmax(output)
-        predicted_class = classes[predicted_class_idx]
-        probability = float(output[0][predicted_class_idx])
+        outputs = []
+        outputs.append(httpclient.InferRequestedOutput("FOOD_LABEL", binary_data=False))
+        outputs.append(httpclient.InferRequestedOutput("PROBABILITY", binary_data=False))
+
+        # Run inference
+        results = triton_client.infer(model_name=FOOD11_MODEL_NAME, inputs=inputs, outputs=outputs)
+
+        predicted_class = results.as_numpy("FOOD_LABEL")
+        probability = results.as_numpy("PROBABILITY")
 
         return predicted_class, probability
 
@@ -62,9 +59,7 @@ def upload():
         f.save(os.path.join(app.instance_path, 'uploads', secure_filename(f.filename)))
         # New! using request_triton
         img_path = "./instance/uploads/" + secure_filename(f.filename)
-        img = Image.open(img_path).convert('RGB')  
-        img_tensor = preprocess_image(img)
-        preds, probs = request_triton(img_tensor)
+        preds, probs = request_triton(img_path)
         if preds:
             return '<button type="button" class="btn btn-info btn-sm">' + str(preds) + '</button>' 
     return '<a href="#" class="badge badge-warning">Warning</a>'
@@ -72,9 +67,7 @@ def upload():
 @app.route('/test', methods=['GET'])
 def test():
     img_path = "./instance/uploads/test_image.jpeg"
-    img = Image.open(img_path).convert('RGB')  
-    img_tensor = preprocess_image(img)
-    preds, probs = request_triton(img_tensor)
+    preds, probs = request_triton(img_path)
     return str(preds)
 
 if __name__ == '__main__':
