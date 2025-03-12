@@ -1,6 +1,4 @@
 import numpy as np
-from PIL import Image
-import torchvision.transforms as transforms
 from flask import Flask, redirect, url_for, request, render_template
 from werkzeug.utils import secure_filename
 import os
