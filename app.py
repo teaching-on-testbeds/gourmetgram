@@ -63,7 +63,7 @@ def upload():
         img_path = "./instance/uploads/" + secure_filename(f.filename)
         img = Image.open(img_path).convert('RGB')  
         img_tensor = preprocess_image(img)
-        preds, probs = request_triton(img_tensor, model_name=FOOD11_MODEL_NAME)
+        preds, probs = request_triton(img_tensor)
         return '<button type="button" class="btn btn-info btn-sm">' + str(preds) + '</button>' 
     return '<a href="#" class="badge badge-warning">Warning</a>'
 
