@@ -10,6 +10,8 @@ app = Flask(__name__)
 
 os.makedirs(os.path.join(app.instance_path, 'uploads'), exist_ok=True)
 
+TRITON_SERVER_URL=os.environ['TRITON_SERVER_URL']
+FOOD11_MODEL_NAME=os.environ['FOOD11_MODEL_NAME']
 
 def preprocess_image(img):
     transform = transforms.Compose([
