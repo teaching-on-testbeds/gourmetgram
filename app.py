@@ -1,46 +1,33 @@
 import numpy as np
+import requests
 from flask import Flask, redirect, url_for, request, render_template
 from werkzeug.utils import secure_filename
 import os
 import base64
-import tritonclient.http as httpclient # New: for making requests to Triton
 
 app = Flask(__name__)
 
 os.makedirs(os.path.join(app.instance_path, 'uploads'), exist_ok=True)
 
-TRITON_SERVER_URL=os.environ['TRITON_SERVER_URL']
-FOOD11_MODEL_NAME=os.environ['FOOD11_MODEL_NAME']
+FASTAPI_SERVER_URL = os.environ['FASTAPI_SERVER_URL']  # New: FastAPI server URL
 
-# New! for making requests to Triton
-def request_triton(image_path):
+# New! for making requests to FastAPI
+def request_fastapi(image_path):
     try:
-        # Connect to Triton server
-        triton_client = httpclient.InferenceServerClient(url=TRITON_SERVER_URL)
-
-        # Prepare inputs and outputs
         with open(image_path, 'rb') as f:
             image_bytes = f.read()
-
-        inputs = []
-        inputs.append(httpclient.InferInput("INPUT_IMAGE", [1, 1], "BYTES"))
-
-        encoded_str =  base64.b64encode(image_bytes).decode("utf-8")
-        input_data = np.array([[encoded_str]], dtype=object)
-        inputs[0].set_data_from_numpy(input_data)
-
-        outputs = []
-        outputs.append(httpclient.InferRequestedOutput("FOOD_LABEL", binary_data=False))
-        outputs.append(httpclient.InferRequestedOutput("PROBABILITY", binary_data=False))
-
-        # Run inference
-        results = triton_client.infer(model_name=FOOD11_MODEL_NAME, inputs=inputs, outputs=outputs)
-
-        predicted_class = results.as_numpy("FOOD_LABEL")[0,0]
-        probability = results.as_numpy("PROBABILITY")[0,0]
-
+        
+        encoded_str = base64.b64encode(image_bytes).decode("utf-8")
+        payload = {"image": encoded_str}
+        
+        response = requests.post(f"{FASTAPI_SERVER_URL}/predict", json=payload)
+        response.raise_for_status()
+        
+        result = response.json()
+        predicted_class = result.get("food_label")
+        probability = result.get("probability")
+        
         return predicted_class, probability
-
     except Exception as e:
         print(f"Error during inference: {e}")  
         return None, None  
@@ -53,20 +40,20 @@ def index():
 def upload():
     preds = None
     if request.method == 'POST':
-        # Get the file from post request
         f = request.files['file']
         f.save(os.path.join(app.instance_path, 'uploads', secure_filename(f.filename)))
-        # New! using request_triton
-        img_path = "./instance/uploads/" + secure_filename(f.filename)
-        preds, probs = request_triton(img_path)
+        img_path = os.path.join(app.instance_path, 'uploads', secure_filename(f.filename))
+        
+        preds, probs = request_fastapi(img_path)
         if preds:
-            return '<button type="button" class="btn btn-info btn-sm">' + str(preds) + '</button>' 
+            return f'<button type="button" class="btn btn-info btn-sm">{preds}</button>'
+    
     return '<a href="#" class="badge badge-warning">Warning</a>'
 
 @app.route('/test', methods=['GET'])
 def test():
-    img_path = "./instance/uploads/test_image.jpeg"
-    preds, probs = request_triton(img_path)
+    img_path = os.path.join(app.instance_path, 'uploads', 'test_image.jpeg')
+    preds, probs = request_fastapi(img_path)
     return str(preds)
 
 if __name__ == '__main__':
