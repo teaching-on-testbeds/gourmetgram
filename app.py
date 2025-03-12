@@ -30,7 +30,7 @@ def request_triton(image_tensor):
         input_data = httpclient.InferInput("input", image_tensor.shape, "FP32")
         input_data.set_data_from_numpy(image_tensor)
 
-        response = client.infer(MODEL_NAME, [input_data])
+        response = client.infer(FOOD11_MODEL_NAME, [input_data])
         output = response.as_numpy("output")
 
         classes = np.array([
@@ -72,7 +72,7 @@ def test():
     img_path = "./instance/uploads/test_image.jpeg"
     img = Image.open(img_path).convert('RGB')  
     img_tensor = preprocess_image(img)
-    preds, probs = request_triton(img_tensor, model_name=FOOD11_MODEL_NAME)
+    preds, probs = request_triton(img_tensor)
     return str(preds)
 
 if __name__ == '__main__':
