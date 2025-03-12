@@ -28,9 +28,8 @@ $(document).ready(function () {
     $('#btn-predict').click(function () {
         var form_data = new FormData($('#upload-file')[0]);
 
-        // Show loading animation
         $(this).hide();
-        $('.loader').show();
+        // $('.loader').show();
 
         // Make prediction by calling api /predict
         $.ajax({
