@@ -1,6 +1,6 @@
 Flask
 numpy
 Pillow
-tritonclient
+tritonclient[http]
 --extra-index-url https://download.pytorch.org/whl/cpu
 torchvision==0.20.1+cpu
