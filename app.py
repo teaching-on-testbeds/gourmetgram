@@ -46,7 +46,8 @@ def request_triton(image_tensor):
         return predicted_class, probability
 
     except Exception as e:
-        return str(e), 0.0
+        print(f"Error during inference: {e}")  
+        return None, None  
 
 @app.route('/', methods=['GET'])
 def index():
@@ -64,7 +65,8 @@ def upload():
         img = Image.open(img_path).convert('RGB')  
         img_tensor = preprocess_image(img)
         preds, probs = request_triton(img_tensor)
-        return '<button type="button" class="btn btn-info btn-sm">' + str(preds) + '</button>' 
+        if preds:
+            return '<button type="button" class="btn btn-info btn-sm">' + str(preds) + '</button>' 
     return '<a href="#" class="badge badge-warning">Warning</a>'
 
 @app.route('/test', methods=['GET'])
