@@ -69,7 +69,7 @@ def upload():
 
 @app.route('/test', methods=['GET'])
 def test():
-    img_path = "./instance/uploads/test_image.jpeg")
+    img_path = "./instance/uploads/test_image.jpeg"
     img = Image.open(img_path).convert('RGB')  
     img_tensor = preprocess_image(img)
     preds, probs = request_triton(img_tensor, model_name=FOOD11_MODEL_NAME)
