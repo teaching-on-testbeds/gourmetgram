@@ -2,6 +2,7 @@ import numpy as np
 from flask import Flask, redirect, url_for, request, render_template
 from werkzeug.utils import secure_filename
 import os
+import base64
 import tritonclient.http as httpclient # New: for making requests to Triton
 
 app = Flask(__name__)
@@ -15,7 +16,7 @@ FOOD11_MODEL_NAME=os.environ['FOOD11_MODEL_NAME']
 def request_triton(image_path):
     try:
         # Connect to Triton server
-        client = httpclient.InferenceServerClient(url=TRITON_SERVER_URL)
+        triton_client = httpclient.InferenceServerClient(url=TRITON_SERVER_URL)
 
         # Prepare inputs and outputs
         with open(image_path, 'rb') as f:
@@ -35,8 +36,8 @@ def request_triton(image_path):
         # Run inference
         results = triton_client.infer(model_name=FOOD11_MODEL_NAME, inputs=inputs, outputs=outputs)
 
-        predicted_class = results.as_numpy("FOOD_LABEL")
-        probability = results.as_numpy("PROBABILITY")
+        predicted_class = results.as_numpy("FOOD_LABEL")[0,0]
+        probability = results.as_numpy("PROBABILITY")[0,0]
 
         return predicted_class, probability
 
