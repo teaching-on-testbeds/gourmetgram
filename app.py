@@ -60,14 +60,18 @@ def upload():
         f = request.files['file']
         f.save(os.path.join(app.instance_path, 'uploads', secure_filename(f.filename)))
         # New! using request_triton
-        img_tensor = preprocess_image("./instance/uploads/" + secure_filename(f.filename))
+        img_path = "./instance/uploads/" + secure_filename(f.filename)
+        img = Image.open(img_path).convert('RGB')  
+        img_tensor = preprocess_image(img)
         preds, probs = request_triton(img_tensor, model_name=FOOD11_MODEL_NAME)
         return '<button type="button" class="btn btn-info btn-sm">' + str(preds) + '</button>' 
     return '<a href="#" class="badge badge-warning">Warning</a>'
 
 @app.route('/test', methods=['GET'])
 def test():
-    img_tensor = preprocess_image("./instance/uploads/test_image.jpeg")
+    img_path = "./instance/uploads/test_image.jpeg")
+    img = Image.open(img_path).convert('RGB')  
+    img_tensor = preprocess_image(img)
     preds, probs = request_triton(img_tensor, model_name=FOOD11_MODEL_NAME)
     return str(preds)
 
