@@ -52,10 +52,9 @@ def request_triton(image_path):
         # Run inference
         results = triton_client.infer(model_name=FOOD11_MODEL_NAME, inputs=inputs, outputs=outputs)
 
-        # Get the softmax output
-        softmax_probs = results.as_numpy("output")[0]  # Shape: (11,)
-
-        # Convert softmax output to class label
+        logits = results.as_numpy("output")[0]
+        exp_logits = np.exp(logits - np.max(logits))
+        softmax_probs = exp_logits / np.sum(exp_logits)
         predicted_index = np.argmax(softmax_probs)
         predicted_label = FOOD_CLASSES[predicted_index]
         probability = float(softmax_probs[predicted_index])
@@ -79,14 +78,14 @@ def upload():
         img_path = "./instance/uploads/" + secure_filename(f.filename)
         preds, probs = request_triton(img_path)
         if preds:
-            return f'<button type="button" class="btn btn-info btn-sm">{preds} ({probs:.2f})</button>'
+            return f'<button type="button" class="btn btn-info btn-sm">{preds}</button>'
     return '<a href="#" class="badge badge-warning">Warning</a>'
 
 @app.route('/test', methods=['GET'])
 def test():
     img_path = "./instance/uploads/test_image.jpeg"
     preds, probs = request_triton(img_path)
-    return f"{preds} ({probs:.2f})"
+    return f"{preds}"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
