@@ -1,5 +1,5 @@
 Flask
 numpy
 tritonclient[http]
---index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://download.pytorch.org/whl/cpu
 torchvision
