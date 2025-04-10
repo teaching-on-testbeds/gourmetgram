@@ -16,7 +16,7 @@ os.makedirs(os.path.join(app.instance_path, 'uploads'), exist_ok=True)
 FASTAPI_SERVER_URL = os.environ['FASTAPI_SERVER_URL']  # FastAPI server URL
 
 # New! for upoading production images to MinIO bucket
-def upload_production_bucket(img_path, pred):
+def upload_production_bucket(img_path, preds):
     classes = np.array(["Bread", "Dairy product", "Dessert", "Egg", "Fried food",
 	    "Meat", "Noodles/Pasta", "Rice", "Seafood", "Soup",
 	    "Vegetable/Fruit"])
