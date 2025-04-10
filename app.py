@@ -4,14 +4,36 @@ from flask import Flask, redirect, url_for, request, render_template
 from werkzeug.utils import secure_filename
 import os
 import base64
+import s3fs
+
+# New! Authenticate to MinIO object store
+fs = s3fs.S3FileSystem(endpoint_url = "http://minio:9000", key = "your-acceess-key", secret = "your-secret-key", use_ssl = False)
 
 app = Flask(__name__)
 
 os.makedirs(os.path.join(app.instance_path, 'uploads'), exist_ok=True)
 
-FASTAPI_SERVER_URL = os.environ['FASTAPI_SERVER_URL']  # New: FastAPI server URL
+FASTAPI_SERVER_URL = os.environ['FASTAPI_SERVER_URL']  # FastAPI server URL
 
-# New! for making requests to FastAPI
+# New! for upoading production images to MinIO bucket
+def upload_production_bucket(img_path, pred):
+    classes = np.array(["Bread", "Dairy product", "Dessert", "Egg", "Fried food",
+	    "Meat", "Noodles/Pasta", "Rice", "Seafood", "Soup",
+	    "Vegetable/Fruit"])
+
+    pred_index = np.where(classes == preds)[0][0]
+    class_dir = f"class_{pred_index:02d}"
+
+    # create a unique filename for the image    
+    prediction_id = str(uuid.uuid4())
+
+    bucket_name = "production"
+    root, ext = os.path.splitext(img_path)
+    s3_path = f"{bucket_name}/{class_dir}/{prediction_id}{ext}"
+    
+    fs.put(img_path, s3_path)
+
+# For making requests to FastAPI
 def request_fastapi(image_path):
     try:
         with open(image_path, 'rb') as f:
@@ -47,8 +69,9 @@ def upload():
         
         preds, probs = request_fastapi(img_path)
         if preds:
+            upload_production_bucket(img_path, pred) # New! upload production image to MinIO bucket
             return f'<button type="button" class="btn btn-info btn-sm">{preds}</button>'
-    
+
     return '<a href="#" class="badge badge-warning">Warning</a>'
 
 @app.route('/test', methods=['GET'])
