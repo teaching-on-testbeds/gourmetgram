@@ -5,6 +5,9 @@ from werkzeug.utils import secure_filename
 import os
 import base64
 import s3fs
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+executor = ThreadPoolExecutor(max_workers=2)  # can adjust max_workers as needed
 
 # New! Authenticate to MinIO object store
 fs = s3fs.S3FileSystem(endpoint_url = "http://minio:9000", key = "your-acceess-key", secret = "your-secret-key", use_ssl = False)
@@ -69,7 +72,7 @@ def upload():
         
         preds, probs = request_fastapi(img_path)
         if preds:
-            upload_production_bucket(img_path, preds) # New! upload production image to MinIO bucket
+            executor.submit(upload_production_bucket, img_path, preds) # New! upload production image to MinIO bucket
             return f'<button type="button" class="btn btn-info btn-sm">{preds}</button>'
 
     return '<a href="#" class="badge badge-warning">Warning</a>'
