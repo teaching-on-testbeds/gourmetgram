@@ -4,6 +4,7 @@ from flask import Flask, redirect, url_for, request, render_template
 from werkzeug.utils import secure_filename
 import os
 import base64
+from datetime import datetime
 import boto3
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -29,6 +30,7 @@ def upload_production_bucket(img_path, preds, confidence):
     classes = np.array(["Bread", "Dairy product", "Dessert", "Egg", "Fried food",
 	    "Meat", "Noodles/Pasta", "Rice", "Seafood", "Soup",
 	    "Vegetable/Fruit"])
+    timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
 
     pred_index = np.where(classes == preds)[0][0]
     class_dir = f"class_{pred_index:02d}"
@@ -50,7 +52,8 @@ def upload_production_bucket(img_path, preds, confidence):
         Tagging={
             'TagSet': [
                 {'Key': 'predicted_class', 'Value': preds},
-                {'Key': 'confidence', 'Value': f"{confidence:.3f}"}
+                {'Key': 'confidence', 'Value': f"{confidence:.3f}"},
+                {'Key': 'timestamp', 'Value': timestamp}
             ]
         }
     )
