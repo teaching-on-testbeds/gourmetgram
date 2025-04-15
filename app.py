@@ -10,7 +10,10 @@ from concurrent.futures import ThreadPoolExecutor
 executor = ThreadPoolExecutor(max_workers=2)  # can adjust max_workers as needed
 
 # New! Authenticate to MinIO object store
-fs = s3fs.S3FileSystem(endpoint_url = "http://minio:9000", key = "your-access-key", secret = "your-secret-key", use_ssl = False)
+fs = s3fs.S3FileSystem(endpoint_url = os.environ['MINIO_URL'], 
+                       key = os.environ['MINIO_USER'], 
+                       secret = os.environ['MINIO_PASSWORD'], 
+                       use_ssl = False)
 
 app = Flask(__name__)
 
