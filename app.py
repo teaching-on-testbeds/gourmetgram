@@ -91,7 +91,7 @@ def upload():
         
         preds, probs = request_fastapi(img_path)
         if preds:
-            executor.submit(upload_production_bucket, img_path, preds, confidence) # New! upload production image to MinIO bucket
+            executor.submit(upload_production_bucket, img_path, preds, probs) # New! upload production image to MinIO bucket
             return f'<button type="button" class="btn btn-info btn-sm">{preds}</button>'
 
     return '<a href="#" class="badge badge-warning">Warning</a>'
