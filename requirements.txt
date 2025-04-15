@@ -1,4 +1,4 @@
 Flask
 numpy
 requests
-s3fs
+boto3
