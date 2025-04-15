@@ -4,6 +4,7 @@ from flask import Flask, redirect, url_for, request, render_template
 from werkzeug.utils import secure_filename
 import os
 import base64
+from mimetypes import guess_type
 from datetime import datetime
 import boto3
 import uuid
@@ -40,10 +41,15 @@ def upload_production_bucket(img_path, preds, confidence):
 
     bucket_name = "production"
     root, ext = os.path.splitext(img_path)
+    content_type = guess_type(img_path)[0] or 'application/octet-stream'
     s3_key = f"{class_dir}/{prediction_id}{ext}"
     
     with open(img_path, 'rb') as f:
-        s3.upload_fileobj(f, bucket_name, s3_key)
+        s3.upload_fileobj(f, 
+            bucket_name, 
+            s3_key, 
+            ExtraArgs={'ContentType': content_type}
+            )
 
     # tag the object with predicted class and confidence
     s3.put_object_tagging(
