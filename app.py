@@ -4,16 +4,19 @@ from flask import Flask, redirect, url_for, request, render_template
 from werkzeug.utils import secure_filename
 import os
 import base64
-import s3fs
+import boto3
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 executor = ThreadPoolExecutor(max_workers=2)  # can adjust max_workers as needed
 
 # New! Authenticate to MinIO object store
-fs = s3fs.S3FileSystem(endpoint_url = os.environ['MINIO_URL'], 
-                       key = os.environ['MINIO_USER'], 
-                       secret = os.environ['MINIO_PASSWORD'], 
-                       use_ssl = False)
+s3 = boto3.client(
+    's3',
+    endpoint_url=os.environ['MINIO_URL'],  # e.g. 'http://minio:9000'
+    aws_access_key_id=os.environ['MINIO_USER'],
+    aws_secret_access_key=os.environ['MINIO_PASSWORD'],
+    region_name='us-east-1'  # required for the boto client but not used by MinIO
+)
 
 app = Flask(__name__)
 
@@ -22,7 +25,7 @@ os.makedirs(os.path.join(app.instance_path, 'uploads'), exist_ok=True)
 FASTAPI_SERVER_URL = os.environ['FASTAPI_SERVER_URL']  # FastAPI server URL
 
 # New! for uploading production images to MinIO bucket
-def upload_production_bucket(img_path, preds):
+def upload_production_bucket(img_path, preds, confidence):
     classes = np.array(["Bread", "Dairy product", "Dessert", "Egg", "Fried food",
 	    "Meat", "Noodles/Pasta", "Rice", "Seafood", "Soup",
 	    "Vegetable/Fruit"])
@@ -35,9 +38,22 @@ def upload_production_bucket(img_path, preds):
 
     bucket_name = "production"
     root, ext = os.path.splitext(img_path)
-    s3_path = f"{bucket_name}/{class_dir}/{prediction_id}{ext}"
+    s3_key = f"{class_dir}/{prediction_id}{ext}"
     
-    fs.put(img_path, s3_path)
+    with open(img_path, 'rb') as f:
+        s3.upload_fileobj(f, bucket_name, s3_key)
+
+    # tag the object with predicted class and confidence
+    s3.put_object_tagging(
+        Bucket=bucket_name,
+        Key=s3_key,
+        Tagging={
+            'TagSet': [
+                {'Key': 'predicted_class', 'Value': preds},
+                {'Key': 'confidence', 'Value': f"{confidence:.3f}"}
+            ]
+        }
+    )
 
 # For making requests to FastAPI
 def request_fastapi(image_path):
@@ -75,7 +91,7 @@ def upload():
         
         preds, probs = request_fastapi(img_path)
         if preds:
-            executor.submit(upload_production_bucket, img_path, preds) # New! upload production image to MinIO bucket
+            executor.submit(upload_production_bucket, img_path, preds, confidence) # New! upload production image to MinIO bucket
             return f'<button type="button" class="btn btn-info btn-sm">{preds}</button>'
 
     return '<a href="#" class="badge badge-warning">Warning</a>'
