@@ -107,7 +107,7 @@ def upload():
               "Meat", "Noodles/Pasta", "Rice", "Seafood", "Soup", "Vegetable/Fruit"]
             select_html = f'''
                 <form method="POST" action="/correct-label/{s3_key}">
-                    <select name="corrected_label" onchange="this.form.submit()" class="form-select form-select-sm" style="width: auto; display: inline-block;">
+                    <select name="corrected_class" onchange="this.form.submit()" class="form-select form-select-sm" style="width: auto; display: inline-block;">
                     {''.join([f'<option value="{cls}" {"selected" if cls == preds else ""}>{cls}</option>' for cls in class_list])}
                 </select>
                 </form>
@@ -119,10 +119,10 @@ def upload():
 # New! tag object if user modifies the label
 @app.route('/correct-label/<path:key>', methods=['POST'])
 def correct_label(key):
-    new_label = request.form.get('corrected_label')
+    new_label = request.form.get('corrected_class')
     current_tags = s3.get_object_tagging(Bucket='production', Key=key)['TagSet']
     tags = {t['Key']: t['Value'] for t in current_tags}
-    tags['corrected_label'] = new_label
+    tags['corrected_class'] = new_label
     tag_set = [{'Key': k, 'Value': v} for k, v in tags.items()]
     s3.put_object_tagging(Bucket='production', Key=key, Tagging={'TagSet': tag_set})
     return '', 204
