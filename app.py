@@ -100,32 +100,32 @@ def upload():
         
         preds, probs = request_fastapi(img_path)
         if preds:
-            executor.submit(upload_production_bucket, img_path, preds, probs, prediction_id) 
-            # New! return a flag icon along with the class label
-            # Clicking the flag icon submits a form with the object key passed as an argument, 
-            # so we can tag it as "flagged"
+            executor.submit(upload_production_bucket, img_path, preds, probs, prediction_id)
+            # New! return a menu so user can modify the label
             s3_key = get_object_key(preds, prediction_id, img_path)
-            flag_icon = f'''
-                <form method="POST" action="/flag/{s3_key}" style="display:inline">
-                    <button type="submit" class="btn btn-outline-warning btn-sm">🚩</button>
-                </form>'''
-            return f'<button type="button" class="btn btn-info btn-sm">{preds}</button> {flag_icon}'
+            class_list = ["Bread", "Dairy product", "Dessert", "Egg", "Fried food",
+              "Meat", "Noodles/Pasta", "Rice", "Seafood", "Soup", "Vegetable/Fruit"]
+            select_html = f'''
+                <form method="POST" action="/correct-label/{s3_key}">
+                    <select name="corrected_label" onchange="this.form.submit()" class="form-select form-select-sm" style="width: auto; display: inline-block;">
+                    {''.join([f'<option value="{cls}" {"selected" if cls == preds else ""}>{cls}</option>' for cls in class_list])}
+                </select>
+                </form>
+                '''
+            return select_html
 
     return '<a href="#" class="badge badge-warning">Warning</a>'
 
-# New! tag an object as "flagged" if user clicks the "flag" icon
-@app.route('/flag/<path:key>', methods=['POST'])
-def flag_object(key):
-    bucket = "production"
-    current_tags = s3.get_object_tagging(Bucket=bucket, Key=key)['TagSet']
+# New! tag object if user modifies the label
+@app.route('/correct-label/<path:key>', methods=['POST'])
+def correct_label(key):
+    new_label = request.form.get('corrected_label')
+    current_tags = s3.get_object_tagging(Bucket='production', Key=key)['TagSet']
     tags = {t['Key']: t['Value'] for t in current_tags}
-
-    if "flagged" not in tags:
-        tags["flagged"] = "true"
-        tag_set = [{'Key': k, 'Value': v} for k, v in tags.items()]
-        s3.put_object_tagging(Bucket=bucket, Key=key, Tagging={'TagSet': tag_set})
-
-    return '', 204  # No Content: allows staying on the same page  
+    tags['corrected_label'] = new_label
+    tag_set = [{'Key': k, 'Value': v} for k, v in tags.items()]
+    s3.put_object_tagging(Bucket='production', Key=key, Tagging={'TagSet': tag_set})
+    return '', 204
 
 @app.route('/test', methods=['GET'])
 def test():
