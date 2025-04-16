@@ -11,7 +11,6 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 executor = ThreadPoolExecutor(max_workers=2)  # can adjust max_workers as needed
 
-# New! Authenticate to MinIO object store
 s3 = boto3.client(
     's3',
     endpoint_url=os.environ['MINIO_URL'],  # e.g. 'http://minio:9000'
@@ -26,20 +25,21 @@ os.makedirs(os.path.join(app.instance_path, 'uploads'), exist_ok=True)
 
 FASTAPI_SERVER_URL = os.environ['FASTAPI_SERVER_URL']  # FastAPI server URL
 
-# New! for uploading production images to MinIO bucket
-def upload_production_bucket(img_path, preds, confidence, prediction_id):
+# Helper function for getting object key
+def get_object_key(preds, prediction_id, filename):
     classes = np.array(["Bread", "Dairy product", "Dessert", "Egg", "Fried food",
-	    "Meat", "Noodles/Pasta", "Rice", "Seafood", "Soup",
-	    "Vegetable/Fruit"])
-    timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-
+        "Meat", "Noodles/Pasta", "Rice", "Seafood", "Soup",
+        "Vegetable/Fruit"])
     pred_index = np.where(classes == preds)[0][0]
     class_dir = f"class_{pred_index:02d}"
+    ext = os.path.splitext(filename)[1]
+    return f"{class_dir}/{prediction_id}{ext}"
 
+def upload_production_bucket(img_path, preds, confidence, prediction_id):
+    timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
     bucket_name = "production"
-    root, ext = os.path.splitext(img_path)
     content_type = guess_type(img_path)[0] or 'application/octet-stream'
-    s3_key = f"{class_dir}/{prediction_id}{ext}"
+    s3_key = get_object_key(preds, prediction_id, img_path)
     
     with open(img_path, 'rb') as f:
         s3.upload_fileobj(f, 
@@ -100,10 +100,32 @@ def upload():
         
         preds, probs = request_fastapi(img_path)
         if preds:
-            executor.submit(upload_production_bucket, img_path, preds, probs, prediction_id) # New! upload production image to MinIO bucket
-            return f'<button type="button" class="btn btn-info btn-sm">{preds}</button>'
+            executor.submit(upload_production_bucket, img_path, preds, probs, prediction_id) 
+            # New! return a flag icon along with the class label
+            # Clicking the flag icon submits a form with the object key passed as an argument, 
+            # so we can tag it as "flagged"
+            s3_key = get_object_key(preds, prediction_id, img_path)
+            flag_icon = f'''
+                <form method="POST" action="/flag/{s3_key}" style="display:inline">
+                    <button type="submit" class="btn btn-outline-warning btn-sm">🚩</button>
+                </form>'''
+            return f'<button type="button" class="btn btn-info btn-sm">{preds}</button> {flag_icon}'
 
     return '<a href="#" class="badge badge-warning">Warning</a>'
+
+# New! tag an object as "flagged" if user clicks the "flag" icon
+@app.route('/flag/<path:key>', methods=['POST'])
+def flag_object(key):
+    bucket = "production"
+    current_tags = s3.get_object_tagging(Bucket=bucket, Key=key)['TagSet']
+    tags = {t['Key']: t['Value'] for t in current_tags}
+
+    if "flagged" not in tags:
+        tags["flagged"] = "true"
+        tag_set = [{'Key': k, 'Value': v} for k, v in tags.items()]
+        s3.put_object_tagging(Bucket=bucket, Key=key, Tagging={'TagSet': tag_set})
+
+    return '', 204  # No Content: allows staying on the same page  
 
 @app.route('/test', methods=['GET'])
 def test():
