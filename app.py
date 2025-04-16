@@ -27,7 +27,7 @@ os.makedirs(os.path.join(app.instance_path, 'uploads'), exist_ok=True)
 FASTAPI_SERVER_URL = os.environ['FASTAPI_SERVER_URL']  # FastAPI server URL
 
 # New! for uploading production images to MinIO bucket
-def upload_production_bucket(img_path, preds, confidence):
+def upload_production_bucket(img_path, preds, confidence, prediction_id):
     classes = np.array(["Bread", "Dairy product", "Dessert", "Egg", "Fried food",
 	    "Meat", "Noodles/Pasta", "Rice", "Seafood", "Soup",
 	    "Vegetable/Fruit"])
@@ -35,9 +35,6 @@ def upload_production_bucket(img_path, preds, confidence):
 
     pred_index = np.where(classes == preds)[0][0]
     class_dir = f"class_{pred_index:02d}"
-
-    # create a unique filename for the image    
-    prediction_id = str(uuid.uuid4())
 
     bucket_name = "production"
     root, ext = os.path.splitext(img_path)
@@ -97,10 +94,13 @@ def upload():
         f = request.files['file']
         f.save(os.path.join(app.instance_path, 'uploads', secure_filename(f.filename)))
         img_path = os.path.join(app.instance_path, 'uploads', secure_filename(f.filename))
+
+        # create a unique filename for the image
+        prediction_id = str(uuid.uuid4())
         
         preds, probs = request_fastapi(img_path)
         if preds:
-            executor.submit(upload_production_bucket, img_path, preds, probs) # New! upload production image to MinIO bucket
+            executor.submit(upload_production_bucket, img_path, preds, probs, prediction_id) # New! upload production image to MinIO bucket
             return f'<button type="button" class="btn btn-info btn-sm">{preds}</button>'
 
     return '<a href="#" class="badge badge-warning">Warning</a>'
