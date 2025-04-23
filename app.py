@@ -58,7 +58,7 @@ def test():
 @app.route('/version', methods=['GET'])
 def version():
     try:
-        with open('app/versions.txt', 'r') as f:
+        with open('versions.txt', 'r') as f:
             model_version = f.read().strip()
         return jsonify({"model_version": model_version})
     except FileNotFoundError:
