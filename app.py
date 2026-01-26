@@ -1,6 +1,7 @@
 import numpy as np
 from PIL import Image
 import torchvision.transforms as transforms
+from torchvision import models
 import torch
 from flask import Flask, redirect, url_for, request, render_template
 from werkzeug.utils import secure_filename
@@ -10,7 +11,15 @@ app = Flask(__name__)
 
 os.makedirs(os.path.join(app.instance_path, 'uploads'), exist_ok=True)
 
-model = torch.load("food11.pth", map_location=torch.device('cpu') )
+model = models.mobilenet_v2(weights=None)
+num_ftrs = model.last_channel
+model.classifier = torch.nn.Sequential(
+    torch.nn.Dropout(0.5),
+    torch.nn.Linear(num_ftrs, 11)
+)
+state = torch.load("food11.pth", map_location=torch.device('cpu'))
+model.load_state_dict(state)
+model.eval()
 
 def preprocess_image(img):
     transform = transforms.Compose([
