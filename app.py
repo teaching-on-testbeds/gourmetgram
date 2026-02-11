@@ -3,7 +3,7 @@ from PIL import Image
 import torchvision.transforms as transforms
 from torchvision import models
 import torch
-from flask import Flask, redirect, url_for, request, render_template
+from flask import Flask, redirect, url_for, request, render_template, jsonify
 from werkzeug.utils import secure_filename
 import os
 
@@ -63,6 +63,15 @@ def upload():
 def test():
     preds, probs = model_predict("./instance/uploads/test_image.jpeg", model)
     return str(preds)
+
+@app.route('/version', methods=['GET'])
+def version():
+    try:
+        with open('versions.txt', 'r') as f:
+            model_version = f.read().strip()
+        return jsonify({"model_version": model_version})
+    except FileNotFoundError:
+        return jsonify({"error": "versions.txt not found"}), 404
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=False)
