@@ -11,14 +11,11 @@ app = Flask(__name__)
 
 os.makedirs(os.path.join(app.instance_path, 'uploads'), exist_ok=True)
 
-model = models.mobilenet_v2(weights=None)
-num_ftrs = model.last_channel
-model.classifier = torch.nn.Sequential(
-    torch.nn.Dropout(0.5),
-    torch.nn.Linear(num_ftrs, 11)
+model = torch.load(
+    "food11.pth",
+    weights_only=False,
+    map_location=torch.device("cpu"),
 )
-state = torch.load("food11.pth", map_location=torch.device('cpu'))
-model.load_state_dict(state)
 model.eval()
 
 def preprocess_image(img):
