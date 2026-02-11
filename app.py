@@ -10,7 +10,12 @@ app = Flask(__name__)
 
 os.makedirs(os.path.join(app.instance_path, 'uploads'), exist_ok=True)
 
-model = torch.load("food11.pth", map_location=torch.device('cpu') )
+model = torch.load(
+    "food11.pth",
+    weights_only=False,
+    map_location=torch.device("cpu"),
+)
+model.eval()
 
 def preprocess_image(img):
     transform = transforms.Compose([
