@@ -6,6 +6,11 @@ import torch
 from flask import Flask, redirect, url_for, request, render_template
 from werkzeug.utils import secure_filename
 import os
+import uuid
+from datetime import datetime
+from mimetypes import guess_type
+from concurrent.futures import ThreadPoolExecutor
+from google.cloud import storage
 
 app = Flask(__name__)
 
@@ -21,6 +26,15 @@ state = torch.load("food11.pth", map_location=torch.device('cpu'))
 model.load_state_dict(state)
 model.eval()
 
+classes = np.array([
+    "Bread", "Dairy product", "Dessert", "Egg", "Fried food",
+    "Meat", "Noodles/Pasta", "Rice", "Seafood", "Soup", "Vegetable/Fruit"
+])
+
+GCS_LABELED_BUCKET = os.environ.get("GCS_LABELED_BUCKET")
+executor = ThreadPoolExecutor(max_workers=2)
+storage_client = storage.Client() if GCS_LABELED_BUCKET else None
+
 def preprocess_image(img):
     transform = transforms.Compose([
         transforms.Resize(256),
@@ -34,15 +48,33 @@ def model_predict(img_path, model):
     img = Image.open(img_path).convert('RGB')
     img = preprocess_image(img)
 
-    classes = np.array(["Bread", "Dairy product", "Dessert", "Egg", "Fried food",
-	"Meat", "Noodles/Pasta", "Rice", "Seafood", "Soup",
-	"Vegetable/Fruit"])
-
     with torch.no_grad():
         output = model(img)
         prob, predicted_class = torch.max(output, 1)
-    
+
     return classes[predicted_class.item()], torch.sigmoid(prob).item()
+
+def upload_labeled_bucket(img_path, preds, confidence, prediction_id):
+    if not storage_client:
+        return
+
+    pred_index = int(np.where(classes == preds)[0][0])
+    class_dir = f"class_{pred_index:02d}"
+    _, ext = os.path.splitext(img_path)
+    if not ext:
+        ext = ".jpg"
+    object_name = f"{class_dir}/{prediction_id}{ext}"
+
+    content_type = guess_type(img_path)[0] or "application/octet-stream"
+    bucket = storage_client.bucket(GCS_LABELED_BUCKET)
+    blob = bucket.blob(object_name)
+    blob.upload_from_filename(img_path, content_type=content_type)
+    blob.metadata = {
+        "predicted_class": str(preds),
+        "confidence": f"{confidence:.3f}",
+        "timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    blob.patch()
 
 @app.route('/', methods=['GET'])
 def index():
@@ -52,11 +84,19 @@ def index():
 def upload():
     preds = None
     if request.method == 'POST':
-        # Get the file from post request
         f = request.files['file']
-        f.save(os.path.join(app.instance_path, 'uploads', secure_filename(f.filename)))
-        preds, probs = model_predict("./instance/uploads/" + secure_filename(f.filename), model)
-        return '<button type="button" class="btn btn-info btn-sm">' + str(preds) + '</button>' 
+        filename = secure_filename(f.filename)
+        img_path = os.path.join(app.instance_path, 'uploads', filename)
+        f.save(img_path)
+
+        prediction_id = str(uuid.uuid4())
+        preds, probs = model_predict(img_path, model)
+
+        if GCS_LABELED_BUCKET:
+            executor.submit(upload_labeled_bucket, img_path, preds, probs, prediction_id)
+
+        return '<button type="button" class="btn btn-info btn-sm">' + str(preds) + '</button>'
+
     return '<a href="#" class="badge badge-warning">Warning</a>'
 
 @app.route('/test', methods=['GET'])
