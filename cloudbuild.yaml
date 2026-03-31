@@ -13,4 +13,4 @@ substitutions:
   _REGION: us-central1
   _REPO_NAME: gourmetgram-repo
   _IMAGE_NAME: gourmetgram
-  _IMAGE_TAG: cloudstorage
+  _IMAGE_TAG: eventarc

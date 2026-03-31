@@ -3,7 +3,7 @@ from PIL import Image
 import torchvision.transforms as transforms
 from torchvision import models
 import torch
-from flask import Flask, redirect, url_for, request, render_template
+from flask import Flask, request, render_template, jsonify
 from werkzeug.utils import secure_filename
 import os
 import uuid
@@ -32,8 +32,9 @@ classes = np.array([
 ])
 
 GCS_LABELED_BUCKET = os.environ.get("GCS_LABELED_BUCKET")
+GCS_RAW_BUCKET = os.environ.get("GCS_RAW_BUCKET")
 executor = ThreadPoolExecutor(max_workers=2)
-storage_client = storage.Client() if GCS_LABELED_BUCKET else None
+storage_client = storage.Client() if (GCS_LABELED_BUCKET or GCS_RAW_BUCKET) else None
 
 def preprocess_image(img):
     transform = transforms.Compose([
@@ -55,7 +56,7 @@ def model_predict(img_path, model):
     return classes[predicted_class.item()], torch.sigmoid(prob).item()
 
 def upload_labeled_bucket(img_path, preds, confidence, prediction_id):
-    if not storage_client:
+    if not storage_client or not GCS_LABELED_BUCKET:
         return
 
     pred_index = int(np.where(classes == preds)[0][0])
@@ -76,13 +77,19 @@ def upload_labeled_bucket(img_path, preds, confidence, prediction_id):
     }
     blob.patch()
 
+def run_inference_and_store(img_path):
+    prediction_id = str(uuid.uuid4())
+    preds, probs = model_predict(img_path, model)
+    if GCS_LABELED_BUCKET:
+        upload_labeled_bucket(img_path, preds, probs, prediction_id)
+    return preds
+
 @app.route('/', methods=['GET'])
 def index():
     return render_template('index.html')
 
 @app.route('/predict', methods=['GET', 'POST'])
 def upload():
-    preds = None
     if request.method == 'POST':
         f = request.files['file']
         filename = secure_filename(f.filename)
@@ -99,9 +106,33 @@ def upload():
 
     return '<a href="#" class="badge badge-warning">Warning</a>'
 
+@app.route('/event', methods=['POST'])
+def handle_event():
+    if not storage_client or not GCS_RAW_BUCKET or not GCS_LABELED_BUCKET:
+        return jsonify({"error": "GCS_RAW_BUCKET and GCS_LABELED_BUCKET must be set"}), 500
+
+    event = request.get_json(silent=True) or {}
+    object_name = event.get("name")
+    bucket_name = event.get("bucket")
+
+    if not object_name or not bucket_name:
+        return jsonify({"status": "ignored", "reason": "missing bucket/name"}), 200
+
+    if bucket_name != GCS_RAW_BUCKET:
+        return jsonify({"status": "ignored", "reason": "bucket mismatch"}), 200
+
+    local_name = os.path.basename(object_name)
+    local_path = os.path.join(app.instance_path, 'uploads', local_name)
+
+    raw_blob = storage_client.bucket(GCS_RAW_BUCKET).blob(object_name)
+    raw_blob.download_to_filename(local_path)
+    prediction = run_inference_and_store(local_path)
+
+    return jsonify({"status": "ok", "prediction": prediction}), 200
+
 @app.route('/test', methods=['GET'])
 def test():
-    preds, probs = model_predict("./instance/uploads/test_image.jpeg", model)
+    preds, _ = model_predict("./instance/uploads/test_image.jpeg", model)
     return str(preds)
 
 if __name__ == '__main__':
